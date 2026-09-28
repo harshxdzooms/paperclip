@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { chmod, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { readLocalAiCredentialFile } from "../services/local-ai-credential-file.js";
@@ -19,12 +19,13 @@ describe("isolated credential file safety", () => {
     await expect(readLocalAiCredentialFile(filename)).rejects.toThrow();
     await expect(readLocalAiCredentialFile(home)).rejects.toThrow();
   });
-  it.skipIf(process.platform === "win32")("rejects file and ancestor symlinks", async () => {
-    const filename = path.join(home, "credentials.json");
-    await writeFile(filename, "fixture", { mode: 0o600 });
-    await symlink(filename, path.join(home, "linked.json"));
+  it("rejects file and ancestor reparse points", async () => {
+    const targetHome = path.join(home, "other-login");
+    await mkdir(targetHome);
+    await writeFile(path.join(targetHome, "credentials.json"), "other-fixture", { mode: 0o600 });
+    await symlink(path.join(targetHome, "credentials.json"), path.join(home, "linked.json"), "file");
     await expect(readLocalAiCredentialFile(path.join(home, "linked.json"))).rejects.toThrow();
-    await symlink(home, path.join(home, "linked-home"));
+    await symlink(targetHome, path.join(home, "linked-home"), "junction");
     await expect(readLocalAiCredentialFile(path.join(home, "linked-home", "credentials.json"))).rejects.toThrow();
   });
 });

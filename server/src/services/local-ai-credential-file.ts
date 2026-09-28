@@ -1,13 +1,31 @@
-import { open } from "node:fs/promises";
+import { lstat, open, realpath } from "node:fs/promises";
+import path from "node:path";
 import { openRunnerApiWorkspaceFile } from "./native-runtime/runner-api-files.js";
 
 const MAX_CREDENTIAL_BYTES = 64 * 1024;
 
-/** Bounded descriptor read; Unix uses a confined descriptor and never reopens a checked path. */
+function normalizeWindowsPath(value: string): string {
+  return path.resolve(value).replaceAll("/", "\\").replaceAll(/\\+$/g, "").toLowerCase();
+}
+
+/** Reject Windows links before opening a credential path. */
+async function assertWindowsCredentialPath(filename: string): Promise<void> {
+  const resolved = await realpath(filename);
+  if (normalizeWindowsPath(resolved) !== normalizeWindowsPath(filename)) throw new Error("Invalid credential file");
+
+  let current = path.resolve(filename);
+  while (true) {
+    if ((await lstat(current)).isSymbolicLink()) throw new Error("Invalid credential file");
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+}
+
+/** Bounded descriptor read; Unix uses a confined descriptor and Windows rejects resolved links. */
 export async function readLocalAiCredentialFile(filename: string): Promise<string> {
-  const file = process.platform === "win32"
-    ? await open(filename, "r")
-    : await openRunnerApiWorkspaceFile(filename);
+  if (process.platform === "win32") await assertWindowsCredentialPath(filename);
+  const file = process.platform === "win32" ? await open(filename, "r") : await openRunnerApiWorkspaceFile(filename);
   try {
     const stat = await file.stat();
     const posix = process.platform !== "win32";
