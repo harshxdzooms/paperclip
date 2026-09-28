@@ -1,18 +1,11 @@
-import { lstat, open, realpath } from "node:fs/promises";
+import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { openRunnerApiWorkspaceFile } from "./native-runtime/runner-api-files.js";
 
 const MAX_CREDENTIAL_BYTES = 64 * 1024;
 
-function normalizeWindowsPath(value: string): string {
-  return path.resolve(value).replaceAll("/", "\\").replaceAll(/\\+$/g, "").toLowerCase();
-}
-
 /** Reject Windows links before opening a credential path. */
 async function assertWindowsCredentialPath(filename: string): Promise<void> {
-  const resolved = await realpath(filename);
-  if (normalizeWindowsPath(resolved) !== normalizeWindowsPath(filename)) throw new Error("Invalid credential file");
-
   let current = path.resolve(filename);
   while (true) {
     if ((await lstat(current)).isSymbolicLink()) throw new Error("Invalid credential file");

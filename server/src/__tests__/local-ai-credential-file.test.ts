@@ -19,6 +19,11 @@ describe("isolated credential file safety", () => {
     await expect(readLocalAiCredentialFile(filename)).rejects.toThrow();
     await expect(readLocalAiCredentialFile(home)).rejects.toThrow();
   });
+  it("accepts equivalent Windows path spellings", async () => {
+    const filename = path.join(home, "credentials.json");
+    await writeFile(filename, "fixture", { mode: 0o600 });
+    await expect(readLocalAiCredentialFile(path.join(home, ".", "credentials.json"))).resolves.toBe("fixture");
+  });
   it("rejects file and ancestor reparse points", async () => {
     const targetHome = path.join(home, "other-login");
     await mkdir(targetHome);
