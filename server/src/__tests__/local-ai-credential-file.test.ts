@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { chmod, mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -19,10 +20,15 @@ describe("isolated credential file safety", () => {
     await expect(readLocalAiCredentialFile(filename)).rejects.toThrow();
     await expect(readLocalAiCredentialFile(home)).rejects.toThrow();
   });
-  it("accepts equivalent Windows path spellings", async () => {
+  it.skipIf(process.platform !== "win32")("accepts an equivalent Windows short path", async () => {
     const filename = path.join(home, "credentials.json");
     await writeFile(filename, "fixture", { mode: 0o600 });
-    await expect(readLocalAiCredentialFile(path.join(home, ".", "credentials.json"))).resolves.toBe("fixture");
+    if (home.includes(" ")) return;
+    const shortHome = execFileSync(process.env.ComSpec ?? "cmd.exe", [
+      "/d", "/c", `for %I in (${home}) do @echo %~sI`,
+    ], { encoding: "utf8" }).trim();
+    if (shortHome.toLowerCase() === home.toLowerCase()) return;
+    await expect(readLocalAiCredentialFile(path.join(shortHome, "credentials.json"))).resolves.toBe("fixture");
   });
   it("rejects file and ancestor reparse points", async () => {
     const targetHome = path.join(home, "other-login");
